@@ -15,18 +15,8 @@ const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const PRODUCTS = {
   'pro_pack': {
     title: 'PixelTap Pro',
-    description: 'Unlock 50 layers, 512x512 canvas, extra palettes',
+    description: 'Animation, layers, big canvas, symmetry, onion skin, GIF export',
     price: 50, // Stars
-  },
-  'brush_pack': {
-    title: 'Brush Pack',
-    description: '12 custom pixel brushes & stamps',
-    price: 25,
-  },
-  'palette_pack': {
-    title: 'Color Palettes',
-    description: '20 curated color palettes for pixel art',
-    price: 15,
   },
 };
 
