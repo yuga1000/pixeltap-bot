@@ -169,8 +169,8 @@ const server = http.createServer(async (req, res) => {
   res.end('Not found');
 });
 
-server.listen(PORT, async () => {
-  console.log(`PixelTap Bot running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log(`PixelTap Bot running on 0.0.0.0:${PORT}`);
 
   // Set webhook will be done manually after deploy
   // (need the Railway URL first)
