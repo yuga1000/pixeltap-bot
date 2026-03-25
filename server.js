@@ -214,6 +214,74 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: send file to user via bot (for iOS export)
+  // Increased limit for base64-encoded files (up to ~20MB)
+  if (req.method === 'POST' && req.url === '/api/send-file') {
+    const chunks = [];
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > 20 * 1024 * 1024) { // 20MB limit
+        res.writeHead(413, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: false, error: 'File too large' }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', async () => {
+      try {
+        const body = Buffer.concat(chunks).toString();
+        const { userId, filename, mimeType, base64 } = JSON.parse(body);
+        if (!userId || !base64) {
+          res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+          res.end(JSON.stringify({ ok: false, error: 'Missing userId or file data' }));
+          return;
+        }
+
+        // Convert base64 to buffer
+        const buffer = Buffer.from(base64, 'base64');
+        const isGif = mimeType === 'image/gif';
+
+        // Build multipart/form-data for Telegram Bot API
+        const boundary = '----PixelTapBoundary' + Date.now();
+        const method = isGif ? 'sendAnimation' : 'sendDocument';
+        const fieldName = isGif ? 'animation' : 'document';
+
+        const parts = [];
+        // chat_id part
+        parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${userId}`);
+        // caption part
+        parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\nHere's your ${isGif ? 'animation' : 'image'} from PixelTap!`);
+        // file part
+        parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename || 'pixeltap.' + (isGif ? 'gif' : 'png')}"\r\nContent-Type: ${mimeType || 'application/octet-stream'}\r\n\r\n`);
+
+        const header = Buffer.from(parts.join('\r\n') + '\r\n');
+        const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+        const multipartBody = Buffer.concat([header, buffer, footer]);
+
+        const tgRes = await fetch(`${TG_API}/${method}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          },
+          body: multipartBody,
+        });
+        const tgData = await tgRes.json();
+
+        console.log(`Send file: user=${userId} type=${mimeType} size=${buffer.length} ok=${tgData.ok}`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: tgData.ok, error: tgData.ok ? undefined : tgData.description }));
+      } catch (e) {
+        console.error('Send file error:', e);
+        res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
   // CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(200, {
