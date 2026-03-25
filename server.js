@@ -242,23 +242,35 @@ const server = http.createServer(async (req, res) => {
         // Convert base64 to buffer
         const buffer = Buffer.from(base64, 'base64');
         const isGif = mimeType === 'image/gif';
+        const isPng = mimeType === 'image/png';
+
+        // Choose Telegram method: sendAnimation for GIF, sendPhoto for PNG, sendDocument for rest
+        let method, fieldName;
+        if (isGif) { method = 'sendAnimation'; fieldName = 'animation'; }
+        else if (isPng) { method = 'sendPhoto'; fieldName = 'photo'; }
+        else { method = 'sendDocument'; fieldName = 'document'; }
+
+        const ext = isGif ? 'gif' : 'png';
+        const fname = filename || `pixeltap.${ext}`;
 
         // Build multipart/form-data for Telegram Bot API
         const boundary = '----PixelTapBoundary' + Date.now();
-        const method = isGif ? 'sendAnimation' : 'sendDocument';
-        const fieldName = isGif ? 'animation' : 'document';
+        const CRLF = '\r\n';
 
-        const parts = [];
-        // chat_id part
-        parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${userId}`);
-        // caption part
-        parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\nHere's your ${isGif ? 'animation' : 'image'} from PixelTap!`);
-        // file part
-        parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename || 'pixeltap.' + (isGif ? 'gif' : 'png')}"\r\nContent-Type: ${mimeType || 'application/octet-stream'}\r\n\r\n`);
+        const preamble = [
+          `--${boundary}`,
+          `Content-Disposition: form-data; name="chat_id"`,
+          ``,
+          `${userId}`,
+          `--${boundary}`,
+          `Content-Disposition: form-data; name="${fieldName}"; filename="${fname}"`,
+          `Content-Type: ${mimeType || 'application/octet-stream'}`,
+          ``,
+          ``
+        ].join(CRLF);
 
-        const header = Buffer.from(parts.join('\r\n') + '\r\n');
-        const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
-        const multipartBody = Buffer.concat([header, buffer, footer]);
+        const epilogue = Buffer.from(`${CRLF}--${boundary}--${CRLF}`);
+        const multipartBody = Buffer.concat([Buffer.from(preamble), buffer, epilogue]);
 
         const tgRes = await fetch(`${TG_API}/${method}`, {
           method: 'POST',
