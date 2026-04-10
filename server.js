@@ -244,8 +244,11 @@ const server = http.createServer(async (req, res) => {
         const isGif = mimeType === 'image/gif';
         const isPng = mimeType === 'image/png';
 
-        // Always sendDocument to preserve original quality (sendAnimation converts GIF to MP4)
+        // sendDocument preserves original GIF quality
+        // sendAnimation converts to MP4 video (good for sharing)
+        // For GIFs: send both document + animation so user gets both options
         let method = 'sendDocument', fieldName = 'document';
+        const alsoSendAnimation = isGif;
 
         const ext = isGif ? 'gif' : 'png';
         const fname = filename || `pixeltap.${ext}`;
@@ -279,6 +282,28 @@ const server = http.createServer(async (req, res) => {
         const tgData = await tgRes.json();
 
         console.log(`Send file: user=${userId} type=${mimeType} size=${buffer.length} ok=${tgData.ok}`);
+
+        // Also send as animation (video) so user has both options
+        if (alsoSendAnimation && tgData.ok) {
+          const boundary2 = '----PixelTapBoundary' + Date.now();
+          const preamble2 = [
+            `--${boundary2}`,
+            `Content-Disposition: form-data; name="chat_id"`,
+            ``,
+            `${userId}`,
+            `--${boundary2}`,
+            `Content-Disposition: form-data; name="animation"; filename="${fname}"`,
+            `Content-Type: ${mimeType}`,
+            ``,
+            ``
+          ].join(CRLF);
+          const body2 = Buffer.concat([Buffer.from(preamble2), buffer, Buffer.from(`${CRLF}--${boundary2}--${CRLF}`)]);
+          fetch(`${TG_API}/sendAnimation`, {
+            method: 'POST',
+            headers: { 'Content-Type': `multipart/form-data; boundary=${boundary2}` },
+            body: body2,
+          }).catch(e => console.error('sendAnimation error:', e));
+        }
 
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ ok: tgData.ok, error: tgData.ok ? undefined : tgData.description }));
