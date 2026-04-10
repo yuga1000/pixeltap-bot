@@ -244,11 +244,8 @@ const server = http.createServer(async (req, res) => {
         const isGif = mimeType === 'image/gif';
         const isPng = mimeType === 'image/png';
 
-        // Choose Telegram method: sendAnimation for GIF, sendPhoto for PNG, sendDocument for rest
-        let method, fieldName;
-        if (isGif) { method = 'sendAnimation'; fieldName = 'animation'; }
-        else if (isPng) { method = 'sendPhoto'; fieldName = 'photo'; }
-        else { method = 'sendDocument'; fieldName = 'document'; }
+        // Always sendDocument to preserve original quality (sendAnimation converts GIF to MP4)
+        let method = 'sendDocument', fieldName = 'document';
 
         const ext = isGif ? 'gif' : 'png';
         const fname = filename || `pixeltap.${ext}`;
